@@ -20,14 +20,12 @@ configs = {'vmess': '', 'vless': '', 'trojan': '', 'ss': '', 'ssr': ''}
 
 response = requests.get("https://raw.githubusercontent.com/T3stAcc/v2ray/main/All_Configs_Sub.txt").text
 for config in response.splitlines():
-    for protocol in configs:
-        if config.startswith(protocol):
-            configs[protocol] += config + '\n'
+    if config.strip() and not config.startswith('#'):
+        for protocol in configs:
+            if config.startswith(f"{protocol}://"):
+                configs[protocol] += config + '\n'
 
 for protocol, data in configs.items():
     with open(files[protocol], 'wb') as f:
-        if protocol == 'vmess':
-            content = data.encode('utf-8')
-        else:
-            content = base64.b64encode(data.encode('utf-8'))
+        content = data.encode('utf-8') if protocol == 'vmess' else base64.b64encode(data.encode('utf-8'))
         f.write(content)
