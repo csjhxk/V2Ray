@@ -85,7 +85,7 @@ def scrape_v2nodes_links(base_url):
 
 def decode_urls(urls):
     decoded_data = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
         future_to_url = {executor.submit(fetch_url_config, url): url for url in urls}
         for future in concurrent.futures.as_completed(future_to_url):
             config = future.result()
