@@ -53,7 +53,11 @@ def main():
     protocols = ["vmess", "vless", "trojan", "ss", "ssr", "hy2", "tuic", "warp://"]
     links = [
         "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
-        "https://raw.githubusercontent.com/mfuu/v2ray/master/v2ray",
+        "https://shadowmere.xyz/api/b64sub",
+        "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt",
+        "https://raw.githubusercontent.com/mfuu/v2ray/main/v2ray",
+        "https://raw.githubusercontent.com/snakem982/proxypool/main/source/v2ray.txt",
+        "https://raw.githubusercontent.com/snakem982/proxypool/main/source/v2ray-2.txt",
         "https://raw.githubusercontent.com/soroushmirzaei/telegram-configs-collector/main/protocols/reality",
         "https://raw.githubusercontent.com/soroushmirzaei/telegram-configs-collector/main/protocols/vless",
         "https://raw.githubusercontent.com/soroushmirzaei/telegram-configs-collector/main/protocols/vmess",
@@ -61,11 +65,17 @@ def main():
         "https://raw.githubusercontent.com/soroushmirzaei/telegram-configs-collector/main/protocols/shadowsocks",
         "https://raw.githubusercontent.com/ts-sf/fly/main/v2",
         "https://raw.githubusercontent.com/aiboboxx/v2rayfree/main/v2",
-        "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity"
+        "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/main/Eternity"
+    ]
+    dir_links = [
+        "https://raw.githubusercontent.com/xiaoji235/airport-free/main/v2ray.txt"
     ]
 
     decoded_links = decode_links(links)
-    merged_configs = filter_for_protocols(decoded_links, protocols)
+    decoded_dir_links = decode_links(dir_links)
+    
+    combined_data = decoded_links + decoded_dir_links
+    merged_configs = filter_for_protocols(combined_data, protocols)
 
     output_filename = os.path.join(output_folder, "All_Configs_Sub.txt")
     base64_filename = os.path.join(output_folder, "All_Configs_Base64.txt")
@@ -83,6 +93,20 @@ def main():
     with open(base64_filename, "w") as output_file:
         encoded_config = base64.b64encode(config_data.encode()).decode()
         output_file.write(encoded_config)
+
+    tls_file = os.path.join(output_folder, "All_Configs_TLS.txt")
+    with open(tls_file, "w") as f:
+        for config in merged_configs:
+            if "security=tls" in config:
+                f.write(config + "\n")
+
+    tls_encoded_file = os.path.join(output_folder, "All_Configs_TLS_Base64.txt")
+    with open(tls_file, "r") as input_file:
+        tls_config_data = input_file.read()
+    
+    encoded_tls_config = base64.b64encode(tls_config_data.encode()).decode()
+    with open(tls_encoded_file, "w") as output_file:
+        output_file.write(encoded_tls_config)
 
 if __name__ == "__main__":
     main()
