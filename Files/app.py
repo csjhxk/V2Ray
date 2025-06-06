@@ -6,7 +6,7 @@ import os
 
 TIMEOUT = 20
 
-fixed_text = """#profile-title: base64:8J+GkyBHaXRodWIgfCBCYXJyeS1mYXIg8J+ltw==
+fixed_text = """#profile-title: base64:VjJSYXkgQ29uZmlncw==
 #profile-update-interval: 1
 #subscription-userinfo: upload=29; download=12; total=10737418240000000; expire=2546249531
 #support-url: https://github.com/T3stAcc/V2Ray
@@ -94,13 +94,14 @@ def main():
         encoded_config = base64.b64encode(config_data.encode()).decode()
         output_file.write(encoded_config)
 
-    tls_file = os.path.join(output_folder, "All_Configs_TLS.txt")
+    tls_file = os.path.join(output_folder, "Configs_TLS.txt")
     with open(tls_file, "w") as f:
+        f.write(fixed_text)
         for config in merged_configs:
             if "security=tls" in config:
                 f.write(config + "\n")
 
-    tls_encoded_file = os.path.join(output_folder, "All_Configs_TLS_Base64.txt")
+    tls_encoded_file = os.path.join(output_folder, "Configs_TLS_base64.txt")
     with open(tls_file, "r") as input_file:
         tls_config_data = input_file.read()
     
