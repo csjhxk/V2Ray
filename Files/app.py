@@ -8,7 +8,7 @@ import concurrent.futures
 
 TIMEOUT = 20
 
-fixed_text = """#profile-title: base64:8J+GkyBHaXRodWIgfCBCYXJyeS1mYXIg8J+ltw==
+fixed_text = """#profile-title: base64:VjJSYXkgQ29uZmlncw==
 #profile-update-interval: 1
 #subscription-userinfo: upload=29; download=12; total=10737418240000000; expire=2546249531
 #support-url: https://github.com/T3stAcc/V2Ray
@@ -52,7 +52,7 @@ def fetch_server_config(server_url):
         soup = BeautifulSoup(response.text, "html.parser")
         config_div = soup.find("textarea", {"id": "config"})
         if config_div and config_div.get("data-config"):
-            return config_div.get("data-config")  # Return plain text directly
+            return config_div.get("data-config")
         return None
     except requests.RequestException:
         return None
