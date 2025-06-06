@@ -19,7 +19,11 @@ def decode_base64(encoded):
     decoded = ""
     for encoding in ["utf-8", "iso-8859-1"]:
         try:
-            decoded = pybase64.b64decode(encoded.encode() + b"=" * (-len(encoded) % 4)).decode(encoding)
+            if isinstance(encoded, bytes):
+                padded = encoded + b"=" * (-len(encoded) % 4)
+            else:
+                padded = encoded.encode() + b"=" * (-len(encoded) % 4)
+            decoded = pybase64.b64decode(padded).decode(encoding)
             break
         except (UnicodeDecodeError, binascii.Error):
             pass
