@@ -94,20 +94,5 @@ def main():
         encoded_config = base64.b64encode(config_data.encode()).decode()
         output_file.write(encoded_config)
 
-    tls_file = os.path.join(output_folder, "All_Configs_TLS.txt")
-    with open(tls_file, "w") as f:
-        f.write(fixed_text)
-        for config in merged_configs:
-            if "security=tls" in config:
-                f.write(config + "\n")
-
-    tls_encoded_file = os.path.join(output_folder, "All_Configs_TLS_Base64.txt")
-    with open(tls_file, "r") as input_file:
-        tls_config_data = input_file.read()
-    
-    encoded_tls_config = base64.b64encode(tls_config_data.encode()).decode()
-    with open(tls_encoded_file, "w") as output_file:
-        output_file.write(encoded_tls_config)
-
 if __name__ == "__main__":
     main()
