@@ -1,12 +1,14 @@
 import pybase64
 import base64
-import requests
 import binascii
+import requests
+from bs4 import BeautifulSoup
 import os
+import concurrent.futures
 
 TIMEOUT = 20
 
-fixed_text = """#profile-title: base64:VjJSYXkgQ29uZmlncw==
+fixed_text = """#profile-title: base64:8J+GkyBHaXRodWIgfCBCYXJyeS1mYXIg8J+ltw==
 #profile-update-interval: 1
 #subscription-userinfo: upload=29; download=12; total=10737418240000000; expire=2546249531
 #support-url: https://github.com/T3stAcc/V2Ray
@@ -17,22 +19,67 @@ def decode_base64(encoded):
     decoded = ""
     for encoding in ["utf-8", "iso-8859-1"]:
         try:
-            decoded = pybase64.b64decode(encoded + b"=" * (-len(encoded) % 4)).decode(encoding)
+            decoded = pybase64.b64decode(encoded.encode() + b"=" * (-len(encoded) % 4)).decode(encoding)
             break
         except (UnicodeDecodeError, binascii.Error):
             pass
     return decoded
 
-def decode_links(links):
-    decoded_data = []
-    for link in links:
+def get_max_pages(base_url):
+    try:
+        response = requests.get(base_url, timeout=TIMEOUT)
+        soup = BeautifulSoup(response.text, "html.parser")
+        pagination = soup.find("ul", class_="pagination justify-content-center")
+        if pagination:
+            page_links = pagination.find_all("a", class_="page-link")
+            page_numbers = []
+            for link in page_links:
+                href = link.get("href", "")
+                if href.startswith("?page="):
+                    try:
+                        page_num = int(href.split("=")[-1])
+                        page_numbers.append(page_num)
+                    except ValueError:
+                        pass
+            return max(page_numbers) if page_numbers else 1
+        return 1
+    except requests.RequestException:
+        return 1
+
+def fetch_server_config(server_url):
+    try:
+        response = requests.get(server_url, timeout=TIMEOUT)
+        soup = BeautifulSoup(response.text, "html.parser")
+        config_div = soup.find("textarea", {"id": "config"})
+        if config_div and config_div.get("data-config"):
+            return config_div.get("data-config")  # Return plain text directly
+        return None
+    except requests.RequestException:
+        return None
+
+def scrape_v2nodes_links(base_url):
+    max_pages = get_max_pages(base_url)
+    links = []
+    for page in range(1, max_pages + 1):
         try:
-            response = requests.get(link, timeout=TIMEOUT)
-            encoded_bytes = response.content
-            decoded_text = decode_base64(encoded_bytes)
-            decoded_data.append(decoded_text)
+            page_url = f"{base_url}?page={page}"
+            response = requests.get(page_url, timeout=TIMEOUT)
+            soup = BeautifulSoup(response.text, "html.parser")
+            servers = soup.find_all("div", class_="col-md-12 servers")
+            server_urls = [f"{base_url}/servers/{server.get('data-id')}/" for server in servers if server.get("data-id")]
+            links.extend(server_urls)
         except requests.RequestException:
             pass
+    return links
+
+def decode_links(links):
+    decoded_data = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_url = {executor.submit(fetch_server_config, url): url for url in links}
+        for future in concurrent.futures.as_completed(future_to_url):
+            config = future.result()
+            if config:
+                decoded_data.append(config)
     return decoded_data
 
 def filter_for_protocols(data, protocols):
@@ -55,9 +102,12 @@ def main():
         "https://shadowmere.xyz/api/b64sub",
         "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt"
     ]
+    base_url = "https://zh.v2nodes.com"
 
     decoded_links = decode_links(links)
-    merged_configs = filter_for_protocols(decoded_links, protocols)
+    v2nodes_links = scrape_v2nodes_links(base_url)
+    v2nodes_configs = decode_links(v2nodes_links)
+    merged_configs = filter_for_protocols(decoded_links + v2nodes_configs, protocols)
 
     output_filename = os.path.join(output_folder, "All_Configs_Sub.txt")
     base64_filename = os.path.join(output_folder, "All_Configs_Base64.txt")
