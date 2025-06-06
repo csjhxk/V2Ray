@@ -46,6 +46,13 @@ def get_max_pages(base_url):
     except requests.RequestException:
         return 1
 
+def fetch_url_config(url):
+    try:
+        response = requests.get(url, timeout=TIMEOUT)
+        return decode_base64(response.content) if response.content else ""
+    except requests.RequestException:
+        return ""
+
 def fetch_server_config(server_url):
     try:
         response = requests.get(server_url, timeout=TIMEOUT)
@@ -72,6 +79,16 @@ def scrape_v2nodes_links(base_url):
             pass
     return links
 
+def decode_urls(urls):
+    decoded_data = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        future_to_url = {executor.submit(fetch_url_config, url): url for url in urls}
+        for future in concurrent.futures.as_completed(future_to_url):
+            config = future.result()
+            if config:
+                decoded_data.append(config)
+    return decoded_data
+
 def decode_links(links):
     decoded_data = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
@@ -85,8 +102,9 @@ def decode_links(links):
 def filter_for_protocols(data, protocols):
     filtered_data = []
     for line in data:
-        if any(protocol in line for protocol in protocols):
-            filtered_data.append(line)
+        for config_line in (line.splitlines() if "\n" in line else [line]):
+            if any(protocol in config_line for protocol in protocols):
+                filtered_data.append(config_line)
     return filtered_data
 
 def ensure_directories_exist():
@@ -102,9 +120,9 @@ def main():
         "https://shadowmere.xyz/api/b64sub",
         "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt"
     ]
-    base_url = "https://zh.v2nodes.com"
+    base_url = "https://v2nodes.com"
 
-    decoded_links = decode_links(links)
+    decoded_links = decode_urls(links)
     v2nodes_links = scrape_v2nodes_links(base_url)
     v2nodes_configs = decode_links(v2nodes_links)
     merged_configs = filter_for_protocols(decoded_links + v2nodes_configs, protocols)
