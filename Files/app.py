@@ -1,5 +1,6 @@
 import pybase64
 import base64
+import binascii
 import requests
 from bs4 import BeautifulSoup
 import os
@@ -18,7 +19,7 @@ def decode_base64(encoded):
     decoded = ""
     for encoding in ["utf-8", "iso-8859-1"]:
         try:
-            decoded = pybase64.b64decode(encoded + b"=" * (-len(encoded) % 4)).decode(encoding)
+            decoded = pybase64.b64decode(encoded.encode() + b"=" * (-len(encoded) % 4)).decode(encoding)
             break
         except (UnicodeDecodeError, binascii.Error):
             pass
