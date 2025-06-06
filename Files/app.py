@@ -52,9 +52,9 @@ def main():
     output_folder = ensure_directories_exist()
     protocols = ["vmess", "vless", "trojan", "ss", "ssr", "hy2", "tuic", "warp://"]
     links = [
-        "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
         "https://shadowmere.xyz/api/b64sub",
         "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt",
+        "https://raw.githubusercontent.com/ALIILAPRO/v2rayNG-Config/main/sub.txt",
         "https://raw.githubusercontent.com/mfuu/v2ray/main/v2ray",
         "https://raw.githubusercontent.com/snakem982/proxypool/main/source/v2ray.txt",
         "https://raw.githubusercontent.com/snakem982/proxypool/main/source/v2ray-2.txt",
