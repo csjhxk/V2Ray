@@ -6,8 +6,6 @@ from bs4 import BeautifulSoup
 import os
 import concurrent.futures
 
-TIMEOUT = 20
-
 fixed_text = """#profile-title: base64:VjJSYXkgQ29uZmlncw==
 #profile-update-interval: 1
 #subscription-userinfo: upload=29; download=12; total=10737418240000000; expire=2546249531
@@ -31,7 +29,7 @@ def decode_base64(encoded):
 
 def get_max_pages(base_url):
     try:
-        response = requests.get(base_url, timeout=TIMEOUT)
+        response = requests.get(base_url)
         soup = BeautifulSoup(response.text, "html.parser")
         pagination = soup.find("ul", class_="pagination justify-content-center")
         if pagination:
@@ -52,14 +50,14 @@ def get_max_pages(base_url):
 
 def fetch_url_config(url):
     try:
-        response = requests.get(url, timeout=TIMEOUT)
+        response = requests.get(url)
         return decode_base64(response.content) if response.content else ""
     except requests.RequestException:
         return ""
 
 def fetch_server_config(server_url):
     try:
-        response = requests.get(server_url, timeout=TIMEOUT)
+        response = requests.get(server_url)
         soup = BeautifulSoup(response.text, "html.parser")
         config_div = soup.find("textarea", {"id": "config"})
         if config_div and config_div.get("data-config"):
@@ -74,7 +72,7 @@ def scrape_v2nodes_links(base_url):
     for page in range(1, max_pages + 1):
         try:
             page_url = f"{base_url}?page={page}"
-            response = requests.get(page_url, timeout=TIMEOUT)
+            response = requests.get(page_url)
             soup = BeautifulSoup(response.text, "html.parser")
             servers = soup.find_all("div", class_="col-md-12 servers")
             server_urls = [f"{base_url}/servers/{server.get('data-id')}/" for server in servers if server.get("data-id")]
@@ -95,7 +93,7 @@ def decode_urls(urls):
 
 def decode_links(links):
     decoded_data = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
         future_to_url = {executor.submit(fetch_server_config, url): url for url in links}
         for future in concurrent.futures.as_completed(future_to_url):
             config = future.result()
@@ -122,7 +120,7 @@ def main():
     protocols = ["vmess", "vless", "trojan", "ss", "ssr", "hy2", "tuic", "warp://"]
     links = [
         "https://shadowmere.xyz/api/b64sub",
-        "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt"
+        "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt",
         "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity"
     ]
     base_url = "https://v2nodes.com"
