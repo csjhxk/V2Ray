@@ -1,6 +1,4 @@
-import requests
-import os
-import base64
+import requests, os, base64
 
 ptt = os.path.abspath(os.path.join(os.getcwd(), '..', 'Splitted-By-Protocol'))
 os.makedirs(ptt, exist_ok=True)
