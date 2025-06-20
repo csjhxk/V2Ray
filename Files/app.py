@@ -121,7 +121,11 @@ def main():
     links = [
         "https://shadowmere.xyz/api/b64sub",
         "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt",
-        "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity"
+        "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity",
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/Vless",
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/Vmess",
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/SS",
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/T%2CH"
     ]
     base_url = "https://v2nodes.com"
 
