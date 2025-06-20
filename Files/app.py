@@ -1,10 +1,5 @@
-import pybase64
-import base64
-import binascii
-import requests
+import pybase64, base64, binascii, requests, os, concurrent.futures
 from bs4 import BeautifulSoup
-import os
-import concurrent.futures
 
 fixed_text = """#profile-title: base64:VjJSYXkgQ29uZmlncw==
 #profile-update-interval: 1
@@ -17,135 +12,128 @@ def decode_base64(encoded):
     decoded = ""
     for encoding in ["utf-8", "iso-8859-1"]:
         try:
-            if isinstance(encoded, bytes):
-                padded = encoded + b"=" * (-len(encoded) % 4)
-            else:
-                padded = encoded.encode() + b"=" * (-len(encoded) % 4)
+            padded = encoded + b"=" * (-len(encoded) % 4) if isinstance(encoded, bytes) else encoded.encode() + b"=" * (-len(encoded) % 4)
             decoded = pybase64.b64decode(padded).decode(encoding)
             break
-        except (UnicodeDecodeError, binascii.Error):
-            pass
+        except (UnicodeDecodeError, binascii.Error): pass
     return decoded
 
 def get_max_pages(base_url):
     try:
-        response = requests.get(base_url)
-        soup = BeautifulSoup(response.text, "html.parser")
-        pagination = soup.find("ul", class_="pagination justify-content-center")
-        if pagination:
-            page_links = pagination.find_all("a", class_="page-link")
-            page_numbers = []
-            for link in page_links:
-                href = link.get("href", "")
-                if href.startswith("?page="):
-                    try:
-                        page_num = int(href.split("=")[-1])
-                        page_numbers.append(page_num)
-                    except ValueError:
-                        pass
-            return max(page_numbers) if page_numbers else 1
+        r = requests.get(base_url)
+        s = BeautifulSoup(r.text, "html.parser")
+        p = s.find("ul", class_="pagination justify-content-center")
+        if p:
+            nums = [int(l.get("href", "").split("=")[-1]) for l in p.find_all("a", class_="page-link") if l.get("href", "").startswith("?page=")]
+            return max(nums) if nums else 1
         return 1
-    except requests.RequestException:
-        return 1
+    except: return 1
 
 def fetch_url_config(url):
     try:
-        response = requests.get(url)
-        return decode_base64(response.content) if response.content else ""
-    except requests.RequestException:
-        return ""
+        r = requests.get(url)
+        return decode_base64(r.content) if r.content else ""
+    except: return ""
 
-def fetch_server_config(server_url):
+def fetch_server_config(url):
     try:
-        response = requests.get(server_url)
-        soup = BeautifulSoup(response.text, "html.parser")
-        config_div = soup.find("textarea", {"id": "config"})
-        if config_div and config_div.get("data-config"):
-            return config_div.get("data-config")
-        return None
-    except requests.RequestException:
-        return None
+        r = requests.get(url)
+        s = BeautifulSoup(r.text, "html.parser")
+        d = s.find("textarea", {"id": "config"})
+        return d.get("data-config") if d and d.get("data-config") else None
+    except: return None
 
 def scrape_v2nodes_links(base_url):
-    max_pages = get_max_pages(base_url)
+    maxp = get_max_pages(base_url)
     links = []
-    for page in range(1, max_pages + 1):
+    for page in range(1, maxp + 1):
         try:
-            page_url = f"{base_url}?page={page}"
-            response = requests.get(page_url)
-            soup = BeautifulSoup(response.text, "html.parser")
-            servers = soup.find_all("div", class_="col-md-12 servers")
-            server_urls = [f"{base_url}/servers/{server.get('data-id')}/" for server in servers if server.get("data-id")]
-            links.extend(server_urls)
-        except requests.RequestException:
-            pass
+            r = requests.get(f"{base_url}?page={page}")
+            s = BeautifulSoup(r.text, "html.parser")
+            servers = s.find_all("div", class_="col-md-12 servers")
+            links += [f"{base_url}/servers/{srv.get('data-id')}/" for srv in servers if srv.get("data-id")]
+        except: pass
     return links
 
+def fetch_mosifree(url):
+    try:
+        r = requests.get(url)
+        if r.status_code == 200:
+            lines = r.text.strip().splitlines()
+            out = []
+            for l in lines:
+                if l.startswith("//"): out.append(l.replace("//", "#"))
+                elif any(p in l for p in ["vmess://", "vless://", "trojan://", "ss://", "ssr://", "hy2://", "tuic://", "warp://"]): out.append(l)
+            return "\n".join(out)
+    except: return ""
+
 def decode_urls(urls):
-    decoded_data = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-        future_to_url = {executor.submit(fetch_url_config, url): url for url in urls}
-        for future in concurrent.futures.as_completed(future_to_url):
-            config = future.result()
-            if config:
-                decoded_data.append(config)
-    return decoded_data
+    data = []
+    with concurrent.futures.ThreadPoolExecutor(30) as e:
+        f = {e.submit(fetch_url_config, u): u for u in urls}
+        for fut in concurrent.futures.as_completed(f):
+            r = fut.result()
+            if r: data.append(r)
+    return data
 
 def decode_links(links):
-    decoded_data = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-        future_to_url = {executor.submit(fetch_server_config, url): url for url in links}
-        for future in concurrent.futures.as_completed(future_to_url):
-            config = future.result()
-            if config:
-                decoded_data.append(config)
-    return decoded_data
+    data = []
+    with concurrent.futures.ThreadPoolExecutor(30) as e:
+        f = {e.submit(fetch_server_config, u): u for u in links}
+        for fut in concurrent.futures.as_completed(f):
+            r = fut.result()
+            if r: data.append(r)
+    return data
 
-def filter_for_protocols(data, protocols):
-    filtered_data = []
-    for line in data:
-        for config_line in (line.splitlines() if "\n" in line else [line]):
-            if any(protocol in config_line for protocol in protocols):
-                filtered_data.append(config_line)
-    return filtered_data
+def decode_mosifree(urls):
+    data = []
+    with concurrent.futures.ThreadPoolExecutor(30) as e:
+        f = {e.submit(fetch_mosifree, u): u for u in urls}
+        for fut in concurrent.futures.as_completed(f):
+            r = fut.result()
+            if r: data.append(r)
+    return data
+
+def filter_for_protocols(data, protos):
+    out = []
+    for l in data:
+        for c in (l.splitlines() if "\n" in l else [l]):
+            if any(p in c for p in protos) or c.startswith("#profile-"): out.append(c)
+    return out
 
 def ensure_directories_exist():
-    output_folder = os.path.abspath(os.path.join(os.getcwd(), ".."))
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-    return output_folder
+    d = os.path.abspath(os.path.join(os.getcwd(), ".."))
+    if not os.path.exists(d): os.makedirs(d)
+    return d
 
 def main():
-    output_folder = ensure_directories_exist()
-    protocols = ["vmess", "vless", "trojan", "ss", "ssr", "hy2", "tuic", "warp://"]
-    links = [
+    folder = ensure_directories_exist()
+    protos = ["vmess", "vless", "trojan", "ss", "ssr", "hy2", "tuic", "warp://"]
+    urls = [
         "https://shadowmere.xyz/api/b64sub",
         "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt",
         "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity"
     ]
+    mosifree = [
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/Vmess",
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/Vless",
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/SS",
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/T%2CH"
+    ]
     base_url = "https://v2nodes.com"
-
-    decoded_links = decode_urls(links)
-    v2nodes_links = scrape_v2nodes_links(base_url)
-    v2nodes_configs = decode_links(v2nodes_links)
-    merged_configs = filter_for_protocols(decoded_links + v2nodes_configs, protocols)
-
-    output_filename = os.path.join(output_folder, "All_Configs_Sub.txt")
-    base64_filename = os.path.join(output_folder, "All_Configs_Base64.txt")
-    if os.path.exists(base64_filename):
-        os.remove(base64_filename)
-
-    with open(output_filename, "w") as f:
+    a = decode_urls(urls)
+    b = scrape_v2nodes_links(base_url)
+    c = decode_links(b)
+    d = decode_mosifree(mosifree)
+    all_data = filter_for_protocols(a + c + d, protos)
+    f_txt = os.path.join(folder, "All_Configs_Sub.txt")
+    b64_txt = os.path.join(folder, "All_Configs_Base64.txt")
+    if os.path.exists(b64_txt): os.remove(b64_txt)
+    with open(f_txt, "w") as f:
         f.write(fixed_text)
-        for config in merged_configs:
-            f.write(config + "\n")
+        for config in all_data: f.write(config + "\n")
+    with open(f_txt, "r") as i: data = i.read()
+    with open(b64_txt, "w") as o:
+        o.write(base64.b64encode(data.encode()).decode())
 
-    with open(output_filename, "r") as input_file:
-        config_data = input_file.read()
-
-    with open(base64_filename, "w") as output_file:
-        encoded_config = base64.b64encode(config_data.encode()).decode()
-        output_file.write(encoded_config)
-
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__": main()
