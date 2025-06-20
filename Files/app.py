@@ -14,13 +14,11 @@ fixed_text = """#profile-title: base64:VjJSYXkgQ29uZmlncw==
 """
 
 def decode_base64(encoded):
-    for encoding in ["utf-8", "iso-8859-1"]:
-        try:
-            padded = (encoded if isinstance(encoded, bytes) else encoded.encode()) + b"=" * (-len(encoded) % 4)
-            return pybase64.b64decode(padded).decode(encoding)
-        except (UnicodeDecodeError, binascii.Error):
-            pass
-    return ""
+    try:
+        padded = (encoded if isinstance(encoded, bytes) else encoded.encode()) + b"=" * (-len(encoded) % 4)
+        return pybase64.b64decode(padded).decode("utf-8", errors="ignore")
+    except (UnicodeDecodeError, binascii.Error):
+        return ""
 
 def get_max_pages(base_url):
     try:
@@ -35,11 +33,11 @@ def get_max_pages(base_url):
 
 def fetch_url_config(url):
     try:
-        response = requests.get(url).content
-        try:
-            return decode_base64(response).splitlines()
-        except (UnicodeDecodeError, binascii.Error):
-            return response.decode("utf-8", errors="ignore").splitlines()
+        response = requests.get(url).content.decode("utf-8", errors="ignore")
+        decoded = decode_base64(response)
+        if decoded:
+            return decoded.splitlines()
+        return response.splitlines()
     except requests.RequestException:
         return []
 
@@ -63,14 +61,14 @@ def scrape_v2nodes_links(base_url):
 
 def decode_urls(urls):
     with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-        return [config for future in concurrent.futures.as_completed(executor.submit(fetch_url_config, url) for url in urls) for config in future.result()]
+        return [config for future in concurrent.futures.as_completed(executor.submit(fetch_url_config, url) for url in urls) for config in future.result() if config.strip()]
 
 def decode_links(links):
     with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
         return [config for future in concurrent.futures.as_completed(executor.submit(fetch_server_config, url) for url in links) if (config := future.result())]
 
 def filter_for_protocols(data, protocols):
-    return [line.strip() for line in data if not line.strip().startswith(("#", "//")) and any(protocol in line for protocol in protocols)]
+    return [line.strip() for line in data if line.strip() and not line.strip().startswith(("#", "//")) and any(protocol in line.lower() for protocol in protocols)]
 
 def main():
     output_folder = os.path.abspath(os.path.join(os.getcwd(), ".."))
@@ -80,8 +78,8 @@ def main():
         "https://shadowmere.xyz/api/b64sub",
         "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt",
         "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity",
-        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/Vless",
         "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/Vmess",
+        "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/Vless",
         "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/SS",
         "https://raw.githubusercontent.com/Mosifree/-FREE2CONFIG/main/T%2CH"
     ]
@@ -89,7 +87,7 @@ def main():
 
     decoded_links = decode_urls(links)
     v2nodes_configs = decode_links(scrape_v2nodes_links(base_url))
-    merged_configs = filter_for_protocols(decoded_links + v2nodes_configs, protocols)
+    merged_configs = list(set(filter_for_protocols(decoded_links + v2nodes_configs, protocols)))
 
     output_filename = os.path.join(output_folder, "All_Configs_Sub.txt")
     base64_filename = os.path.join(output_folder, "All_Configs_Base64.txt")
@@ -97,8 +95,7 @@ def main():
         os.remove(base64_filename)
 
     with open(output_filename, "w") as f:
-        f.write(fixed_text)
-        f.write("\n".join(merged_configs) + "\n")
+        f.write(fixed_text + "\n".join(merged_configs) + "\n")
 
     with open(output_filename, "r") as f:
         with open(base64_filename, "w") as out:
