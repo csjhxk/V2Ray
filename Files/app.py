@@ -1,6 +1,5 @@
 import pybase64
 import base64
-import binascii
 import requests
 from bs4 import BeautifulSoup
 import os
@@ -17,13 +16,10 @@ def decode_base64(encoded):
     decoded = ""
     for encoding in ["utf-8", "iso-8859-1"]:
         try:
-            if isinstance(encoded, bytes):
-                padded = encoded + b"=" * (-len(encoded) % 4)
-            else:
-                padded = encoded.encode() + b"=" * (-len(encoded) % 4)
+            padded = (encoded if isinstance(encoded, bytes) else encoded.encode()) + b"=" * (-len(encoded) % 4)
             decoded = pybase64.b64decode(padded).decode(encoding)
             break
-        except (UnicodeDecodeError, binascii.Error):
+        except:
             pass
     return decoded
 
@@ -33,26 +29,17 @@ def get_max_pages(base_url):
         soup = BeautifulSoup(response.text, "html.parser")
         pagination = soup.find("ul", class_="pagination justify-content-center")
         if pagination:
-            page_links = pagination.find_all("a", class_="page-link")
-            page_numbers = []
-            for link in page_links:
-                href = link.get("href", "")
-                if href.startswith("?page="):
-                    try:
-                        page_num = int(href.split("=")[-1])
-                        page_numbers.append(page_num)
-                    except ValueError:
-                        pass
+            page_numbers = [int(link.get("href").split("=")[-1]) for link in pagination.find_all("a", class_="page-link") if link.get("href").startswith("?page=")]
             return max(page_numbers) if page_numbers else 1
         return 1
-    except requests.RequestException:
+    except:
         return 1
 
 def fetch_url_config(url):
     try:
         response = requests.get(url)
         return decode_base64(response.content) if response.content else ""
-    except requests.RequestException:
+    except:
         return ""
 
 def fetch_server_config(server_url):
@@ -60,64 +47,67 @@ def fetch_server_config(server_url):
         response = requests.get(server_url)
         soup = BeautifulSoup(response.text, "html.parser")
         config_div = soup.find("textarea", {"id": "config"})
-        if config_div and config_div.get("data-config"):
-            return config_div.get("data-config")
-        return None
-    except requests.RequestException:
+        return config_div.get("data-config") if config_div and config_div.get("data-config") else None
+    except:
         return None
 
 def scrape_v2nodes_links(base_url):
-    max_pages = get_max_pages(base_url)
     links = []
-    for page in range(1, max_pages + 1):
+    for page in range(1, get_max_pages(base_url) + 1):
         try:
-            page_url = f"{base_url}?page={page}"
-            response = requests.get(page_url)
+            response = requests.get(f"{base_url}?page={page}")
             soup = BeautifulSoup(response.text, "html.parser")
-            servers = soup.find_all("div", class_="col-md-12 servers")
-            server_urls = [f"{base_url}/servers/{server.get('data-id')}/" for server in servers if server.get("data-id")]
-            links.extend(server_urls)
-        except requests.RequestException:
+            links.extend(f"{base_url}/servers/{server.get('data-id')}/" for server in soup.find_all("div", class_="col-md-12 servers") if server.get("data-id"))
+        except:
             pass
     return links
 
 def decode_urls(urls):
     decoded_data = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         future_to_url = {executor.submit(fetch_url_config, url): url for url in urls}
         for future in concurrent.futures.as_completed(future_to_url):
-            config = future.result()
-            if config:
+            if config := future.result():
                 decoded_data.append(config)
     return decoded_data
 
 def decode_links(links):
     decoded_data = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         future_to_url = {executor.submit(fetch_server_config, url): url for url in links}
         for future in concurrent.futures.as_completed(future_to_url):
-            config = future.result()
-            if config:
+            if config := future.result():
                 decoded_data.append(config)
     return decoded_data
 
 def filter_for_protocols(data, protocols):
     filtered_data = []
-    for line in data:
-        for config_line in (line.splitlines() if "\n" in line else [line]):
-            if any(protocol in config_line for protocol in protocols):
-                filtered_data.append(config_line)
+    current_metadata = []
+    for config in data:
+        lines = config.splitlines() if "\n" in config else [config]
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if line.startswith(("#", "//")):
+                current_metadata.append(line)
+                continue
+            if any(protocol in line for protocol in protocols):
+                filtered_data.extend(current_metadata)
+                filtered_data.append(line)
+                current_metadata = []
+        if current_metadata and not any(any(protocol in l for protocol in protocols) for l in lines):
+            current_metadata = []
     return filtered_data
 
 def ensure_directories_exist():
     output_folder = os.path.abspath(os.path.join(os.getcwd(), ".."))
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
+    os.makedirs(output_folder, exist_ok=True)
     return output_folder
 
 def main():
     output_folder = ensure_directories_exist()
-    protocols = ["vmess", "vless", "trojan", "ss", "ssr", "hy2", "tuic", "warp://"]
+    protocols = ["vmess://", "vless://", "trojan://", "ss://", "ssr://", "hy2://", "tuic://", "warp://"]
     links = [
         "https://shadowmere.xyz/api/b64sub",
         "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt",
@@ -148,8 +138,7 @@ def main():
         config_data = input_file.read()
 
     with open(base64_filename, "w") as output_file:
-        encoded_config = base64.b64encode(config_data.encode()).decode()
-        output_file.write(encoded_config)
+        output_file.write(base64.b64encode(config_data.encode()).decode())
 
 if __name__ == "__main__":
     main()
