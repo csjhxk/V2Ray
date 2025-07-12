@@ -24,5 +24,5 @@ for config in response.splitlines():
 
 for protocol, data in configs.items():
     with open(files[protocol], 'wb') as f:
-        content = data.encode('utf-8') if protocol == 'vmess' else base64.b64encode(data.encode('utf-8'))
+        content = base64.b64encode(data.encode('utf-8'))
         f.write(content)
