@@ -28,12 +28,16 @@ def get_max_pages(base_url):
         soup = BeautifulSoup(response.text, "html.parser")
         pagination = soup.find("ul", class_="pagination justify-content-center")
         if pagination:
-            page_links = pagination.find_all("span", class_="page-link")
+            page_links = pagination.find_all("a", class_="page-link")
             page_numbers = []
             for link in page_links:
-                page_data = link.get("page-data")
-                if page_data and page_data.isdigit():
-                    page_numbers.append(int(page_data))
+                href = link.get("href", "")
+                if href.startswith("?page="):
+                    try:
+                        page_num = int(href.split("=")[-1])
+                        page_numbers.append(page_num)
+                    except ValueError:
+                        pass
             return max(page_numbers) if page_numbers else 1
         return 1
     except requests.RequestException:
@@ -57,26 +61,9 @@ def fetch_server_config(server_url):
     except requests.RequestException:
         return None
 
-def scrape_openproxylist_configs(base_url):
+def scrape_v2nodes_links(base_url):
     max_pages = get_max_pages(base_url)
-    configs = []
-    for page in range(1, max_pages + 1):
-        try:
-            page_url = f"{base_url}?page={page}"
-            response = requests.get(page_url)
-            soup = BeautifulSoup(response.text, "html.parser")
-            server_rows = soup.find_all("tr", id=True)
-            for row in server_rows:
-                config = row.get("data-config")
-                if config:
-                    configs.append(config)
-        except requests.RequestException:
-            pass
-    return configs
-
-def scrape_v2nodes_configs(base_url):
-    max_pages = get_max_pages(base_url)
-    configs = []
+    links = []
     for page in range(1, max_pages + 1):
         try:
             page_url = f"{base_url}?page={page}"
@@ -84,20 +71,25 @@ def scrape_v2nodes_configs(base_url):
             soup = BeautifulSoup(response.text, "html.parser")
             servers = soup.find_all("div", class_="col-md-12 servers")
             server_urls = [f"{base_url}/servers/{server.get('data-id')}/" for server in servers if server.get("data-id")]
-            with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
-                future_to_url = {executor.submit(fetch_server_config, url): url for url in server_urls}
-                for future in concurrent.futures.as_completed(future_to_url):
-                    config = future.result()
-                    if config:
-                        configs.append(config)
+            links.extend(server_urls)
         except requests.RequestException:
             pass
-    return configs
+    return links
 
 def decode_urls(urls):
     decoded_data = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
         future_to_url = {executor.submit(fetch_url_config, url): url for url in urls}
+        for future in concurrent.futures.as_completed(future_to_url):
+            config = future.result()
+            if config:
+                decoded_data.append(config)
+    return decoded_data
+
+def decode_links(links):
+    decoded_data = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=30) as executor:
+        future_to_url = {executor.submit(fetch_server_config, url): url for url in links}
         for future in concurrent.futures.as_completed(future_to_url):
             config = future.result()
             if config:
@@ -126,13 +118,12 @@ def main():
         "https://raw.githubusercontent.com/roosterkid/openproxylist/main/V2RAY_BASE64.txt",
         "https://raw.githubusercontent.com/mahdibland/V2RayAggregator/master/Eternity"
     ]
-    v2nodes_base_url = "https://v2nodes.com"
-    openproxylist_base_url = "https://openproxylist.com/v2ray/"
+    base_url = "https://v2nodes.com"
 
     decoded_links = decode_urls(links)
-    v2nodes_configs = scrape_v2nodes_configs(v2nodes_base_url)
-    openproxylist_configs = scrape_openproxylist_configs(openproxylist_base_url)
-    merged_configs = filter_for_protocols(decoded_links + v2nodes_configs + openproxylist_configs, protocols)
+    v2nodes_links = scrape_v2nodes_links(base_url)
+    v2nodes_configs = decode_links(v2nodes_links)
+    merged_configs = filter_for_protocols(decoded_links + v2nodes_configs, protocols)
 
     output_filename = os.path.join(output_folder, "All_Configs_Sub.txt")
     base64_filename = os.path.join(output_folder, "All_Configs_Base64.txt")
