@@ -4,8 +4,8 @@ from bs4 import BeautifulSoup
 fixed_text = """#profile-title: base64:VjJSYXkgQ29uZmlncw==
 #profile-update-interval: 1
 #subscription-userinfo: upload=29; download=12; total=10737418240000000; expire=2546249531
-#support-url: https://github.com/T3stAcc/V2Ray
-#profile-web-page-url: https://github.com/T3stAcc/V2Ray
+#support-url: https://148668.xyz/
+#profile-web-page-url: https://148668.xyz/
 """
 
 def decode_base64(encoded):
